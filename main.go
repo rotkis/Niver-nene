@@ -84,6 +84,7 @@ func main() {
 	// Comments API
 	mux.HandleFunc("GET /api/comments", getComments)
 	mux.HandleFunc("POST /api/comments", addComment)
+	mux.HandleFunc("DELETE /api/comments/{id}", deleteComment)
 
 	// Static files
 	mux.HandleFunc("GET /uploads/permanent/{file}", serveFile(permanentDir))
@@ -94,7 +95,7 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("🎂 Álbum da Dona Nenê em http://localhost:%s", port)
+	log.Printf("🎂 Galeria da Dona Nenê em http://localhost:%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, mux))
 }
 
@@ -264,6 +265,24 @@ func addComment(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, c)
 }
 
+func deleteComment(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	commentsMu.Lock()
+	defer commentsMu.Unlock()
+	var list []Comment
+	data, _ := os.ReadFile(commentsFile)
+	json.Unmarshal(data, &list)
+	filtered := []Comment{}
+	for _, c := range list {
+		if c.ID != id {
+			filtered = append(filtered, c)
+		}
+	}
+	out, _ := json.Marshal(filtered)
+	os.WriteFile(commentsFile, out, 0644)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func serveFile(dir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		filename := filepath.Base(r.PathValue("file"))
@@ -272,12 +291,6 @@ func serveFile(dir string) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		
-		// Define Content-Type explícito para GIFs
-		if strings.HasSuffix(strings.ToLower(filename), ".gif") {
-			w.Header().Set("Content-Type", "image/gif")
-		}
-		
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		http.ServeFile(w, r, path)
 	}
@@ -306,7 +319,7 @@ const indexHTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Álbum da Dona Nenê 🌸</title>
+<title>Galeria da Dona Nenê 🌸</title>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -684,10 +697,9 @@ body{
   background:#f5f0e8;
 }
 /* GIFs e imagens altas ficam sem corte */
-.photo-frame img[src*=".gif"],
-.photo-frame img[src*=".GIF"] {
-    object-fit: contain;
-    background: #f0ece4;
+.photo-frame img[src$=".gif"],.photo-frame img[src$=".GIF"]{
+  object-fit:contain;
+  background:#f0ece4;
 }
 
 /* washi tape on top of frame */
@@ -810,6 +822,26 @@ body{
   font-size:.75rem;
   color:var(--text-light);
   font-style:italic;
+  flex:1;
+}
+.comment-del{
+  margin-left:auto;
+  background:none;
+  border:none;
+  cursor:pointer;
+  font-size:1.1rem;
+  color:var(--text-light);
+  line-height:1;
+  padding:.1rem .3rem;
+  border-radius:4px;
+  opacity:.45;
+  transition:all .2s;
+  flex-shrink:0;
+}
+.comment-del:hover{
+  opacity:1;
+  background:rgba(200,60,60,.12);
+  color:#b03030;
 }
 .comment-body{
   font-size:.9rem;
@@ -1167,7 +1199,7 @@ body{
     <div class="card-tape tape-rose" style="width:55px;bottom:-11px;left:50%;transform:translateX(-50%) rotate(-2deg)"></div>
 
     <span class="cover-deco">🌸 🌸 🌸</span>
-    <div class="cover-title">Álbum da Dona Nenê</div>
+    <div class="cover-title">Galeria da Dona Nenê</div>
     <div class="cover-sub">Um álbum de memórias eternas ✦ Feito com amor</div>
     <div class="cover-badge">🎂 85 Anos de Alegria</div>
   </div>
@@ -1184,7 +1216,7 @@ body{
 
   <!-- Section 2: Party photos -->
   <div class="section-banner">
-    <div class="section-banner-text">🎂 Níver de 85 Anos 🎂</div>
+    <div class="section-banner-text">🎂 Festa de 85 Anos 🎂</div>
   </div>
   <div id="party-container"></div>
 
@@ -1420,9 +1452,7 @@ function buildSpread(photos, pageId, section, withComments) {
     var img = document.createElement('img');
     img.src = photo.url;
     img.alt = 'Foto';
-    if (!photo.url.toLowerCase().endsWith('.gif')) {
     img.loading = 'lazy';
-    }
     frame.appendChild(img);
 
     // click to zoom
@@ -1577,12 +1607,34 @@ function buildCommentsArea(pageId) {
 function appendComment(list, c) {
   var el = document.createElement('div');
   el.className = 'comment-card';
-  el.innerHTML =
-    '<div class="comment-header">' +
-      '<span class="comment-name">' + esc(c.name) + '</span>' +
-      '<span class="comment-date">' + esc(c.date || '') + '</span>' +
-    '</div>' +
-    '<div class="comment-body">' + esc(c.text) + '</div>';
+
+  var header = document.createElement('div');
+  header.className = 'comment-header';
+  header.innerHTML =
+    '<span class="comment-name">' + esc(c.name) + '</span>' +
+    '<span class="comment-date">' + esc(c.date || '') + '</span>';
+
+  var delBtn = document.createElement('button');
+  delBtn.className = 'comment-del';
+  delBtn.title = 'Apagar comentário';
+  delBtn.textContent = '×';
+  delBtn.addEventListener('click', async function() {
+    if (!confirm('Apagar este comentário?')) return;
+    try {
+      await fetch('/api/comments/' + c.id, { method: 'DELETE' });
+      el.remove();
+      allComments = allComments.filter(function(x){ return x.id !== c.id; });
+      toast('Comentário apagado', '');
+    } catch { toast('Erro ao apagar', 'err'); }
+  });
+  header.appendChild(delBtn);
+
+  var body = document.createElement('div');
+  body.className = 'comment-body';
+  body.textContent = c.text;
+
+  el.appendChild(header);
+  el.appendChild(body);
   list.appendChild(el);
 }
 

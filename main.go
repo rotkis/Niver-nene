@@ -74,6 +74,7 @@ func main() {
 	// Photo APIs
 	mux.HandleFunc("GET /api/permanent", listPhotos(permanentDir, "permanent"))
 	mux.HandleFunc("GET /api/party", listPhotos(partyDir, "party"))
+	mux.HandleFunc("POST /api/permanent/upload", uploadPhotos(permanentDir))
 	mux.HandleFunc("POST /api/party/upload", uploadPhotos(partyDir))
 
 	// Stickers API
@@ -447,6 +448,7 @@ body{
   letter-spacing:.02em;
 }
 .btn-add-photos{background:var(--rose-dark);color:#fff;}
+.btn-add-party{background:var(--teal);color:#fff;}
 .btn-add-stickers{background:var(--gold);color:#fff;}
 .cover-btn:hover{transform:translateY(-2px) rotate(-1.5deg);box-shadow:0 6px 20px rgba(0,0,0,.25);}
 
@@ -456,6 +458,15 @@ body{
   pointer-events:none;
   z-index:3;
   filter:drop-shadow(1px 2px 3px rgba(0,0,0,.15));
+}
+.flower-upload{
+  pointer-events:all;
+  cursor:pointer;
+  transition:transform .2s ease, filter .2s ease;
+}
+.flower-upload:hover{
+  transform:scale(1.25) rotate(10deg);
+  filter:drop-shadow(0 4px 10px rgba(0,0,0,.3));
 }
 
 /* ── cover card ── */
@@ -687,10 +698,11 @@ body{
 .photo-frame img{
   width:100%;
   display:block;
-  max-height:260px;
+  max-height:240px;
   object-fit:contain;
-  background:#f5f0e8;
+  background:#f0ece4;
 }
+
 
 /* washi tape on top of frame */
 .tape{
@@ -1163,23 +1175,24 @@ body{
 
   <!-- top-right buttons -->
   <div class="cover-buttons">
-    <button class="cover-btn btn-add-photos" onclick="openUpload()">📷 Adicionar Fotos</button>
+    <button class="cover-btn btn-add-photos" onclick="openUpload('permanent')">🌸 Fotos da Nenê</button>
+    <button class="cover-btn btn-add-party" onclick="openUpload('party')">🎂 Fotos da Festa</button>
     <button class="cover-btn btn-add-stickers" id="stickerModeBtn" onclick="toggleStickerMode()">✨ Figurinhas</button>
   </div>
 
   <!-- flowers -->
-  <span class="flower" style="font-size:3.5rem;top:7%;left:5%;animation-delay:0s">🌸</span>
-  <span class="flower" style="font-size:2rem;top:14%;left:20%;animation-delay:.5s">🌼</span>
-  <span class="flower" style="font-size:2.8rem;top:6%;right:18%;animation-delay:1s">🌺</span>
-  <span class="flower" style="font-size:2rem;top:22%;right:5%;animation-delay:.3s">🌷</span>
-  <span class="flower" style="font-size:3rem;bottom:18%;left:7%;animation-delay:.8s">🌻</span>
-  <span class="flower" style="font-size:1.8rem;bottom:25%;left:25%;animation-delay:.2s">🌸</span>
-  <span class="flower" style="font-size:3.2rem;bottom:12%;right:8%;animation-delay:1.2s">🌺</span>
-  <span class="flower" style="font-size:1.6rem;bottom:28%;right:22%;animation-delay:.7s">🌼</span>
-  <span class="flower" style="font-size:2.2rem;top:42%;left:2%;animation-delay:.9s">🌷</span>
-  <span class="flower" style="font-size:2.5rem;top:55%;right:2%;animation-delay:.4s">🌸</span>
-  <span class="flower" style="font-size:1.5rem;top:30%;left:10%;animation-delay:1.4s">🌼</span>
-  <span class="flower" style="font-size:1.5rem;bottom:38%;right:14%;animation-delay:1.1s">🌷</span>
+  <span class="flower" style="font-size:3.5rem;top:7%;left:5%">🌸</span>
+  <span class="flower" style="font-size:2rem;top:14%;left:20%">🌼</span>
+  <span class="flower" style="font-size:2.8rem;top:6%;right:18%">🌺</span>
+  <span class="flower" style="font-size:2rem;top:22%;right:5%">🌷</span>
+  <span class="flower flower-upload" title="Clique para adicionar fotos da Nenê 🌸" onclick="openUpload('permanent')" style="font-size:3rem;bottom:18%;left:7%">🌻</span>
+  <span class="flower" style="font-size:1.8rem;bottom:25%;left:25%">🌸</span>
+  <span class="flower" style="font-size:3.2rem;bottom:12%;right:8%">🌺</span>
+  <span class="flower" style="font-size:1.6rem;bottom:28%;right:22%">🌼</span>
+  <span class="flower" style="font-size:2.2rem;top:42%;left:2%">🌷</span>
+  <span class="flower" style="font-size:2.5rem;top:55%;right:2%">🌸</span>
+  <span class="flower" style="font-size:1.5rem;top:30%;left:10%">🌼</span>
+  <span class="flower" style="font-size:1.5rem;bottom:38%;right:14%">🌷</span>
 
   <!-- title card -->
   <div class="cover-card">
@@ -1224,7 +1237,7 @@ body{
 <div class="overlay" id="uploadOverlay">
   <div class="modal">
     <button class="modal-close" onclick="closeUpload()">✕</button>
-    <div class="modal-title">📷 Adicionar Fotos à Festa</div>
+    <div class="modal-title" id="modalTitle">📷 Adicionar Fotos</div>
     <div class="drop-area" id="dropArea">
       <input type="file" id="fileInput" accept="image/*" multiple/>
       <span class="drop-icon">📂</span>
@@ -1283,7 +1296,17 @@ function esc(s) {
 })();
 
 // ── Upload ────────────────────────────────────────────────
-function openUpload() { document.getElementById('uploadOverlay').classList.add('open'); }
+var uploadSection = 'party';
+
+function openUpload(section) {
+  uploadSection = section || 'party';
+  var titles = {
+    permanent: '🌸 Fotos da Nenê (permanentes)',
+    party:     '🎂 Fotos da Festa de 85 Anos'
+  };
+  document.getElementById('modalTitle').textContent = titles[uploadSection];
+  document.getElementById('uploadOverlay').classList.add('open');
+}
 function closeUpload() {
   document.getElementById('uploadOverlay').classList.remove('open');
   document.getElementById('fileInput').value = '';
@@ -1325,11 +1348,17 @@ async function doUpload() {
   var fd = new FormData();
   for (var i = 0; i < selectedFiles.length; i++) fd.append('images', selectedFiles[i]);
   try {
-    var res = await fetch('/api/party/upload', { method: 'POST', body: fd });
+    var res = await fetch('/api/' + uploadSection + '/upload', { method: 'POST', body: fd });
     var data = await res.json();
-    toast(data.uploaded + ' foto(s) adicionada(s) ao álbum! 🎉', 'ok');
+    toast(data.uploaded + ' foto(s) adicionada(s)! 🎉', 'ok');
     closeUpload();
-    await loadParty();
+    if (uploadSection === 'permanent') {
+      var permRes = await fetch('/api/permanent');
+      var permPhotos = await permRes.json();
+      renderAlbum(permPhotos, 'permanent-container', 'permanent', false);
+    } else {
+      await loadParty();
+    }
   } catch(e) {
     toast('Erro ao enviar fotos', 'err');
   }

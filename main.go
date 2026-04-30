@@ -455,12 +455,7 @@ body{
   position:absolute;
   pointer-events:none;
   z-index:3;
-  animation:floatFlower 3.5s ease-in-out infinite;
   filter:drop-shadow(1px 2px 3px rgba(0,0,0,.15));
-}
-@keyframes floatFlower{
-  0%,100%{transform:translateY(0) rotate(0deg);}
-  50%{transform:translateY(-10px) rotate(6deg);}
 }
 
 /* ── cover card ── */
@@ -692,12 +687,13 @@ body{
 .photo-frame img{
   width:100%;
   display:block;
-  max-height:260px;
-  object-fit:contain;
-  background:#f5f0e8;
+  aspect-ratio:4/3;
+  object-fit:cover;
 }
-/* GIFs e imagens altas ficam sem corte */
+/* GIFs mantêm proporção original */
 .photo-frame img[src$=".gif"],.photo-frame img[src$=".GIF"]{
+  aspect-ratio:unset;
+  max-height:240px;
   object-fit:contain;
   background:#f0ece4;
 }

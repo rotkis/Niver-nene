@@ -95,7 +95,7 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("🎂 Galeria da Dona Nenê em http://localhost:%s", port)
+	log.Printf("🎂 Álbum da Dona Nenê em http://localhost:%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, mux))
 }
 
@@ -319,7 +319,7 @@ const indexHTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Galeria da Dona Nenê 🌸</title>
+<title>Álbum da Dona Nenê 🌸</title>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -687,15 +687,9 @@ body{
 .photo-frame img{
   width:100%;
   display:block;
-  aspect-ratio:4/3;
-  object-fit:cover;
-}
-/* GIFs mantêm proporção original */
-.photo-frame img[src$=".gif"],.photo-frame img[src$=".GIF"]{
-  aspect-ratio:unset;
-  max-height:240px;
+  max-height:260px;
   object-fit:contain;
-  background:#f0ece4;
+  background:#f5f0e8;
 }
 
 /* washi tape on top of frame */
@@ -1195,7 +1189,7 @@ body{
     <div class="card-tape tape-rose" style="width:55px;bottom:-11px;left:50%;transform:translateX(-50%) rotate(-2deg)"></div>
 
     <span class="cover-deco">🌸 🌸 🌸</span>
-    <div class="cover-title">Galeria da Dona Nenê</div>
+    <div class="cover-title">Álbum da Dona Nenê</div>
     <div class="cover-sub">Um álbum de memórias eternas ✦ Feito com amor</div>
     <div class="cover-badge">🎂 85 Anos de Alegria</div>
   </div>

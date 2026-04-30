@@ -15,6 +15,6 @@ COPY --from=builder /app/gallery .
 RUN mkdir -p /app/uploads && chmod 755 /app/uploads
 
 EXPOSE 8080
-VOLUME ["/app/uploads"]
+#VOLUME ["/app/uploads"]
 
 CMD ["./gallery"]

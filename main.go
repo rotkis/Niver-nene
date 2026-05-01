@@ -76,6 +76,9 @@ func main() {
 	mux.HandleFunc("GET /api/party", listPhotos(partyDir, "party"))
 	mux.HandleFunc("POST /api/permanent/upload", uploadPhotos(permanentDir))
 	mux.HandleFunc("POST /api/party/upload", uploadPhotos(partyDir))
+	// 🔥 DELETE endpoints para remover fotos
+	mux.HandleFunc("DELETE /api/permanent/{file}", deletePhoto(permanentDir))
+	mux.HandleFunc("DELETE /api/party/{file}", deletePhoto(partyDir))
 
 	// Stickers API
 	mux.HandleFunc("GET /api/stickers", getStickers)
@@ -188,6 +191,33 @@ func uploadPhotos(dir string) http.HandlerFunc {
 			count++
 		}
 		jsonOK(w, map[string]int{"uploaded": count})
+	}
+}
+
+// 🔥 Handler para deletar fotos
+func deletePhoto(dir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		filename := filepath.Base(r.PathValue("file"))
+		path := filepath.Join(dir, filename)
+
+		// Verifica existência
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			http.Error(w, "Arquivo não encontrado", http.StatusNotFound)
+			return
+		}
+		// Verifica extensão permitida
+		ext := strings.ToLower(filepath.Ext(filename))
+		if !slices.Contains(allowedExts, ext) {
+			http.Error(w, "Tipo de arquivo não permitido", http.StatusBadRequest)
+			return
+		}
+		// Remove o arquivo
+		if err := os.Remove(path); err != nil {
+			log.Printf("Erro ao deletar %s: %v", filename, err)
+			http.Error(w, "Erro ao deletar arquivo", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
@@ -703,7 +733,6 @@ body{
   background:#f0ece4;
 }
 
-
 /* washi tape on top of frame */
 .tape{
   position:absolute;
@@ -761,6 +790,29 @@ body{
 }
 .photo-dl:hover{opacity:1;}
 
+/* 🔥 Botão de deletar foto */
+.photo-del{
+  position:absolute;
+  bottom:4px;left:6px;
+  background:none;
+  border:none;
+  cursor:pointer;
+  font-size:1.1rem;
+  opacity:0;
+  transition:opacity 0.2s;
+  z-index:5;
+  padding:4px;
+  border-radius:4px;
+}
+.photo-del:hover{opacity:1;background:rgba(200,60,60,0.1);}
+.photo-frame:hover .photo-del{opacity:0.8;}
+.photo-frame:hover .photo-del:hover{opacity:1;}
+
+/* Mobile: botão sempre visível */
+@media (max-width: 620px) {
+  .photo-del{opacity:0.8;}
+}
+
 /* ── STICKERS LAYER ──────────────────────────────────────── */
 .stickers-layer{
   position:absolute;
@@ -777,13 +829,15 @@ body{
   user-select:none;
   filter:drop-shadow(0 2px 4px rgba(0,0,0,.2));
   transition:transform .15s ease;
+  padding:8px; /* Área de toque maior */
+  margin:-8px; /* Compensa o padding */
 }
 .sticker-el:hover{
   filter:drop-shadow(0 3px 6px rgba(0,0,0,.3));
   z-index:20;
 }
 
-/* ── sticker mode visual ── */
+/* sticker mode visual */
 .spread.sticker-mode{
   cursor:crosshair;
   outline:3px dashed var(--gold);
@@ -1032,6 +1086,11 @@ body{
   border-radius:8px;
   line-height:1;
   transition:all .15s ease;
+  min-width:44px;
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
 }
 .s-opt:hover{transform:scale(1.45);background:var(--cream2);}
 .s-opt.active{background:rgba(200,152,48,.2);transform:scale(1.2);outline:2px solid var(--gold);border-radius:8px;}
@@ -1163,6 +1222,24 @@ body{
   .photo-slot:nth-child(even){margin-top:0;}
   .binding{width:36px;}
   .page{padding:1.3rem 1rem 1.3rem;}
+  
+  /* 🔥 Sticker picker full-width no mobile */
+  .sticker-picker{
+    bottom:0;
+    left:0;
+    right:0;
+    transform:none;
+    border-radius:18px 18px 0 0;
+    max-width:100vw;
+    padding:1rem;
+  }
+  .s-opt{
+    font-size:2.2rem;
+    padding:0.4rem;
+  }
+  .sticker-el{
+    font-size:2.2rem;
+  }
 }
 </style>
 </head>
@@ -1411,6 +1488,12 @@ function renderStickerPicker() {
       span.classList.add('active');
       pickedSticker = emoji;
       document.getElementById('pickerHint').textContent = emoji + ' selecionada! Clique numa página para colocar.';
+      
+      // 🔥 Feedback visual de seleção
+      span.style.transform = 'scale(1.6)';
+      setTimeout(function(){
+        span.style.transform = pickedSticker ? 'scale(1.2)' : 'scale(1)';
+      }, 150);
     });
     grid.appendChild(span);
   });
@@ -1490,6 +1573,40 @@ function buildSpread(photos, pageId, section, withComments) {
     dl.addEventListener('click', function(e){ e.stopPropagation(); });
     frame.appendChild(dl);
 
+    // 🔥 Botão de deletar foto
+    var delBtn = document.createElement('button');
+    delBtn.className = 'photo-del';
+    delBtn.innerHTML = '🗑️';
+    delBtn.title = 'Excluir foto';
+    delBtn.addEventListener('mouseenter', function(){ this.style.opacity = '1'; });
+    delBtn.addEventListener('mouseleave', function(){ this.style.opacity = '0.7'; });
+    delBtn.addEventListener('click', async function(e) {
+      e.stopPropagation();
+      if (!confirm('Tem certeza que deseja excluir esta foto?')) return;
+      
+      try {
+        var sec = section === 'permanent' ? 'permanent' : 'party';
+        var res = await fetch('/api/' + sec + '/' + photo.name, { method: 'DELETE' });
+        if (res.ok) {
+          toast('Foto excluída ✓', 'ok');
+          // Recarrega a seção correspondente
+          if (sec === 'permanent') {
+            var permRes = await fetch('/api/permanent');
+            var permPhotos = await permRes.json();
+            renderAlbum(permPhotos, 'permanent-container', 'permanent', false);
+          } else {
+            await loadParty();
+          }
+        } else {
+          toast('Erro ao excluir', 'err');
+        }
+      } catch(err) {
+        console.error(err);
+        toast('Erro de conexão', 'err');
+      }
+    });
+    frame.appendChild(delBtn);
+
     slot.appendChild(frame);
     row.appendChild(slot);
   });
@@ -1516,7 +1633,7 @@ function buildSpread(photos, pageId, section, withComments) {
   // click to add sticker
   spread.addEventListener('click', async function(e) {
     if (!stickerMode || !pickedSticker) return;
-    if (e.target.closest('.comment-form,.btn-new-comment,.sticker-picker,.overlay,.photo-dl')) return;
+    if (e.target.closest('.comment-form,.btn-new-comment,.sticker-picker,.overlay,.photo-dl,.photo-del')) return;
 
     var rect = spread.getBoundingClientRect();
     var x = ((e.clientX - rect.left) / rect.width)  * 100;
@@ -1546,10 +1663,34 @@ function placeSticker(spread, layer, s) {
   var el = document.createElement('span');
   el.className = 'sticker-el';
   el.textContent = s.emoji;
-  el.title = 'Duplo clique para remover';
+  el.title = 'Duplo clique ou toque longo para remover';
   el.style.left  = s.x + '%';
   el.style.top   = s.y + '%';
   el.style.transform = 'translate(-50%,-50%) rotate(' + rot + 'deg)';
+  
+  // 🔥 Long-press para mobile + double-click para desktop
+  var pressTimer;
+  el.addEventListener('touchstart', function(e) {
+    e.stopPropagation();
+    pressTimer = setTimeout(function() {
+      if (confirm('Remover esta figurinha?')) {
+        fetch('/api/stickers/' + s.id, { method: 'DELETE' })
+          .then(function(res) {
+            if (res.ok) {
+              el.remove();
+              allStickers = allStickers.filter(function(x){ return x.id !== s.id; });
+              toast('Figurinha removida ✓', 'ok');
+            } else {
+              toast('Erro ao remover', 'err');
+            }
+          })
+          .catch(function() { toast('Erro de conexão', 'err'); });
+      }
+    }, 500);
+  });
+  el.addEventListener('touchend', function() { clearTimeout(pressTimer); });
+  el.addEventListener('touchmove', function() { clearTimeout(pressTimer); });
+  
   el.addEventListener('dblclick', async function(e) {
     e.stopPropagation();
     if (!confirm('Remover esta figurinha?')) return;
@@ -1557,9 +1698,10 @@ function placeSticker(spread, layer, s) {
       await fetch('/api/stickers/' + s.id, { method: 'DELETE' });
       el.remove();
       allStickers = allStickers.filter(function(x){ return x.id !== s.id; });
-      toast('Figurinha removida');
+      toast('Figurinha removida ✓', 'ok');
     } catch { toast('Erro', 'err'); }
   });
+  
   layer.appendChild(el);
 }
 
@@ -1730,7 +1872,6 @@ function renderAlbum(photos, containerId, section, withComments) {
     btnPrev.disabled = idx === 0;
     btnNext.disabled = idx === spreads.length - 1;
     current = idx;
-    // smooth scroll to wrapper top
     wrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
